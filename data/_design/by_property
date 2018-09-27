@@ -1,0 +1,1 @@
+{"_id":"_design/by_property","_rev":"1-7cd37a3bbddf513619fd5cd439f5bcb9","views":{"by_table":{"map":"function (doc) {\n  emit(doc.table, 1);\n}"}},"language":"javascript"}

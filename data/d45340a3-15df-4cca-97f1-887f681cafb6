@@ -1,0 +1,1 @@
+{"_id":"d45340a3-15df-4cca-97f1-887f681cafb6","_rev":"2-a01da3a9d65c94ab492b2780c38a128f","createdAt":1530088426325,"updatedAt":1530088426325,"activityName":"pong","gameData":[{"gameName":"pong","theme":"pong","difficulty":1,"score":60,"gameElapsedTimeMs":60008,"selectedGameDurationMs":60000,"extraScoreData":{}}],"table":"activities","deviceSerialNumber":"001EC065DE19"}
