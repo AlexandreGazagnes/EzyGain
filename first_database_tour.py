@@ -19,18 +19,37 @@ import os, logging, sys, time, random, inspect, subprocess
 # from math import ceil
 # import itertools as it
 from pprint import pprint
-
 from collections import OrderedDict, Iterable, Counter
 
 # data management
-from cloudant.client import CouchDB
+# from cloudant.client import CouchDB
 import pandas as pd
 import numpy as np
-# from geopy import distance
 
 # visualization
-import matplotlib.pyplot as plt
-import seaborn as sns
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+
+# machine learning
+# from sklearn.model_selection import GridSearchCV
+# from sklearn.pipeline import Pipeline
+# from sklearn.decomposition import PCA
+# from sklearn.preprocessing import StandardScaler, Normalizer, MinMaxScaler
+
+# from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, RandomForestRegressor
+# from sklearn.tree import DecisionTreeClassifier
+# from sklearn.linear_model import Perceptron, RidgeClassifier
+# from sklearn.neighbors import KNeighborsClassifier
+# from sklearn.neural_network import MLPClassifier
+# from sklearn.svm import LinearSVC, NuSVC
+
+# from sklearn.model_selection import train_test_split
+
+# from sklearn.dummy import DummyClassifier
+# from sklearn.linear_model import LogisticRegression, LinearRegression
+
+# from sklearn.metrics import accuracy_score
+# from sklearn.utils import shuffle
 
 
 ########################################################
@@ -59,7 +78,7 @@ info = logging.info
 #       Filepaths
 ########################################################
 
-FOLDER       = "/home/alex/Bureau/EzyGain/"
+FOLDER       = "/home/alex/EzyGain/"
 DATA_FOLDER  = FOLDER + "data/" 
 
 
@@ -92,16 +111,16 @@ def bdd_request(filename, stdout=False, save=True, meth="GET", ext="") :
     
     pos arg : filename - str : the file you want to download
     
-    opt arg : stdout - bool : if True, will return the std out of os.system command, default False
-              save   - bool : if True create a .json file else stdout the stream, default True
+    opt arg : stdout - bool : if True, will return the stdout of os.system command, default False
+              save   - bool : if True create a file else not, default True
               meth   - str  : API method in ["GET", "POST" "PUT"], default "GET"
               ext    - str  : the extension of file, ex ."json", default ""
     
     do      : save if needed the downloaded data
     
-    raise   : AttributeError if  args not valid
+    raise   : AttributeError if args not valid
     
-    return  : if needed the downloaded data
+    return  :  the downloaded data in str format if stdout = True else None
     """
    
     # filename
@@ -146,7 +165,7 @@ def bdd_request(filename, stdout=False, save=True, meth="GET", ext="") :
 ####
 
 # r = bdd_request(ALL, stdout=False, save=True)
-# assert r == None
+# print(r)
 
 ##################################################################
 
@@ -155,23 +174,22 @@ def handle_all_docs(filename="_all_docs", save=True) :
     """
     desc    : perform a bdd_request for '_all_docs', and create a clean df with, key/value
     
-    pos arg : filename, (str) : the file you want, default "_all_docs" 
+    pos arg : filename - str : the file you want, default "_all_docs" 
     
-    opt arg : save - bool : if True the file will be save, else just streamed, default True
+    opt arg : save - bool : if True the file will be saved, else just stream it, default True
     
-    do      : - 
+    do      : save the data if save = True  
     
     raise   : AttributeError if needed
     
-    return  : clean df with cols [key, values]
+    return  : a clean pd.DataFrame with columns [key, values]
     """
-
 
     # filename
     try                   : filename = str(filename) 
     except Exception as e : raise AttributeError(e)
 
-    #save
+    # save
     try                   : save = bool(save) 
     except Exception as e : raise AttributeError(e)
 
@@ -207,7 +225,7 @@ def download_all() :
     
     opt arg : -
     
-    do      : - 
+    do      : save files in DATA_FOLDER
     
     raise   : -
     
@@ -215,14 +233,14 @@ def download_all() :
     """
 
     # download index
-    bdd_request(ALL, stdout=False, save=True)
+    r = bdd_request(ALL, stdout=False, save=True)
     
     # grab ids
     all_docs = handle_all_docs()
     all_keys = all_docs.key.values
 
-    errors = list()
     # download
+    errors = list()
     for k in all_keys :    
         try :                                        
             bdd_request(k, stdout=False, save=True)                    
@@ -248,8 +266,9 @@ def download_all() :
 
 def load_file(key, save=True) : 
     """
-    desc    : load a file from his key. if possible read the coresponding file else 
-              dowload it, then try to cast as a pd.dataframe or pd.Series object an return it l_docs
+    desc    : load a file from his key, if possible read the corresponding file else 
+              download it, then try to cast the data as a pd.dataframe or pd.Series 
+              object an return it 
     
     pos arg : key - str, the key of the file 
     
@@ -259,14 +278,14 @@ def load_file(key, save=True) :
     
     raise   : AttributeError if needed
     
-    return  : pd.DataFrame, pd.Series object 
+    return  : pd.DataFrame or pd.Series object 
     """
 
     # keys
     try                   : key = str(key) 
     except Exception as e : raise AttributeError(e)
 
-    #save
+    # save
     try                   : save = bool(save) 
     except Exception as e : raise AttributeError(e)
 
@@ -295,16 +314,17 @@ def load_file(key, save=True) :
 
 def build_database(keys, save=False, threshold=0, drop_na=True) : 
     """
-    desc    : load a file from his key. if possible read the coresponding file else 
-              dowload it, then try to cast as a pd.dataframe or pd.Series object an return it l_docs
+    desc    : load a files from a list of keys. build a  - database - with key, _data (pd.DataFrame or pd.Series)
+              and various info regardin this _data.  
+
     
-    pos arg : key - str, the key of the file 
+    pos arg : keys - Iterable(list, set, pd.series), the keys of the files you want 
     
     opt arg : save - bool, if True download the file else just stream it
               threshold - int, the number of files you want to load, if 0 : all, default 0
-              drop_na - bool, if True drop dataFrame Null DataFrame 
+              drop_na - bool, if True drop Null _data 
     
-    do      : - 
+    do      : save if needed
     
     raise   : various AttributeError coresponding args
     
@@ -350,16 +370,13 @@ def build_database(keys, save=False, threshold=0, drop_na=True) :
     # init database
     db = pd.DataFrame(_df_list, columns=["key", "_type", "_len", "_feat", "_data"])
 
-    # # create a str with _data.columns/index
-    # find_cols_index = lambda i : (str(list(i.columns))  if isinstance(i, pd.DataFrame)                                                     else str(list(i.index)))
-    # db["cols_index"] =  db["_data"].apply(find_cols_index)
-
-        # reindex
+    # reindex
     db = db.set_index("key")
 
     # drop_na
-    idxs = db.loc[db["_len"] == 0, :].index
-    db = db.drop(idxs, axis=0)
+    if drop_na : 
+        idxs = db.loc[db["_len"] == 0, :].index
+        db = db.drop(idxs, axis=0)
 
     # convert DataFrame of len(1) in pd.Series      
     new_data = [ ( pd.Series(db.loc[i, "_data"].iloc[0, :]) 
@@ -407,7 +424,7 @@ def manage_meta(db, force_up_level=True, main_cat=True) :
     desc    : from a dabase, identify "meta_params" ie features in _data with unique == 1
               create a "meta_params" to store them and drop this feature in _data
               for both series and dataframe
-              if needed force a sub set of these features to bestore not in meta_params 
+              if needed force a sub set of these features to be stored not in meta_params 
               but in db.columns as a global feature
 
     pos arg : db - pd.DataFrame, the database 
@@ -416,13 +433,13 @@ def manage_meta(db, force_up_level=True, main_cat=True) :
               them in db.columns as a global feature, if not let them stored in meta_params
               default True
               main_cat - bool, if True add group table and feature in one feature named 
-              'main_cat', then drop  them, default True
+              'main_cat', then drop them, default True
    
     do      : - 
     
     raise   : AttributeError if needed 
     
-    return  : pd.DataFrame
+    return  : pd.DataFrame with meta_params feature
     """
 
     # db
@@ -483,7 +500,7 @@ def manage_meta(db, force_up_level=True, main_cat=True) :
         # if pd.Series
         else : 
 
-            # same thing
+            # same thing than for pd.DataFrame objects
             meta_list = [ i for i in obj.index if (
                                             (not isinstance(obj[i], list))
                                         and (not isinstance(obj[i], dict)) ) ] 
@@ -565,8 +582,9 @@ def manage_meta(db, force_up_level=True, main_cat=True) :
 
 ####
 
-db_meta = manage_meta(db, force_up_level=True, main_cat=True)
+db_meta = manage_meta(db)
 cats = db_meta.main_cat.unique()
+print(cats)
 
 # if reload try to del previous db to free space on memory
 try    : del db
@@ -607,7 +625,7 @@ K=[ ['main_cat',                            'inception',    'feature',          
 ##################################################################
 
 
-def group_by_feat(db, feat="main_cat") : 
+def group_by_feat(db, feat="main_cat", verbose=True) : 
     """
     """
 
@@ -626,13 +644,14 @@ def group_by_feat(db, feat="main_cat") :
     # create a spec df
     df              = pd.DataFrame({"key":db.index.values, feat:db[feat].values}) 
 
-    # group and  handle it  
+    # group and handle
     grouped         = df.groupby(feat)
     grouped         = {idx : list(_df.key.values)for idx, _df in grouped}
     
-    # info value_counts
-    grouped_count   = {idx : len(elem) for idx, elem in grouped.items()}
-    info(grouped_count)
+    # info value_counts() like method
+    if verbose : 
+        grouped_count   = {idx : len(elem) for idx, elem in grouped.items()}
+        pprint(grouped_count)
 
     return grouped
 
@@ -740,8 +759,6 @@ db_meta_flatten = flatten_data(db_meta)
 ##################################################################
 
 
-
-
 ##################################################################
 #       Garbage
 ##################################################################
@@ -752,9 +769,6 @@ def _handle_timestamp(t) :
     txt = "{}-{}-{} {}:{}:{}".format(   t.day, t.month, t.year,
                                         t.hour, t.minute, t.second)
     return txt
-
-
-##################################################################
 
 
 def find_candidate_feat(database) : 
@@ -784,4 +798,3 @@ def find_valid_feat(database, candidate_feat) :
 
 
 
-##################################################################
