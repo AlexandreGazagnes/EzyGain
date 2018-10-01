@@ -139,7 +139,8 @@ def bdd_request(filename, stdout=False, save=True, meth="GET", ext="") :
     try    : meth = str(meth)
     except Exception as e : raise AttributeError(e)
     meth = meth.upper()
-    if meth not in ["GET", "POST" "PUT"] : raise AttributeError('method ["GET", "POST" "PUT"]')
+    if meth not in ["GET", "POST" "PUT"] : 
+        raise AttributeError('method ["GET", "POST" "PUT"]')
    
     # command
     url    = BDD_URL + filename
@@ -172,11 +173,13 @@ def bdd_request(filename, stdout=False, save=True, meth="GET", ext="") :
 
 def handle_all_docs(filename="_all_docs", save=True) : 
     """
-    desc    : perform a bdd_request for '_all_docs', and create a clean df with, key/value
+    desc    : perform a bdd_request for '_all_docs', and create a clean df with 
+              key/value
     
     pos arg : filename - str : the file you want, default "_all_docs" 
     
-    opt arg : save - bool : if True the file will be saved, else just stream it, default True
+    opt arg : save - bool : if True the file will be saved, else just stream it, 
+              default True
     
     do      : save the data if save = True  
     
@@ -266,9 +269,9 @@ def download_all() :
 
 def load_file(key, save=True) : 
     """
-    desc    : load a file from his key, if possible read the corresponding file else 
-              download it, then try to cast the data as a pd.dataframe or pd.Series 
-              object an return it 
+    desc    : load a file from his key, if possible read the corresponding file 
+              else, download it, then try to cast the data as a pd.dataframe 
+              or pd.Series object an return it 
     
     pos arg : key - str, the key of the file 
     
@@ -314,14 +317,15 @@ def load_file(key, save=True) :
 
 def build_database(keys, save=False, threshold=0, drop_na=True) : 
     """
-    desc    : load a files from a list of keys. build a  - database - with key, _data (pd.DataFrame or pd.Series)
-              and various info regardin this _data.  
+    desc    : load a files from a list of keys. build a  - database - with key, 
+              _data (pd.DataFrame or pd.Series) and various info regardin this _data.  
 
     
     pos arg : keys - Iterable(list, set, pd.series), the keys of the files you want 
     
     opt arg : save - bool, if True download the file else just stream it
-              threshold - int, the number of files you want to load, if 0 : all, default 0
+              threshold - int, the number of files you want to load, if 0 : all, 
+              default 0
               drop_na - bool, if True drop Null _data 
     
     do      : save if needed
@@ -421,19 +425,19 @@ db = build_database(all_keys, save=True, threshold=0)
 
 def manage_meta(db, force_up_level=True, main_cat=True) : 
     """
-    desc    : from a dabase, identify "meta_params" ie features in _data with unique == 1
-              create a "meta_params" to store them and drop this feature in _data
-              for both series and dataframe
-              if needed force a sub set of these features to be stored not in meta_params 
-              but in db.columns as a global feature
+    desc    : from a dabase, identify "meta_params" ie features in _data with 
+              unique == 1, create a "meta_params" to store them and drop this 
+              feature in _data for both series and dataframe
+              if needed force a sub set of these features to be stored not 
+              in meta_params but in db.columns as a global feature
 
     pos arg : db - pd.DataFrame, the database 
     
-    opt arg : force_up_level - bool, if True delete some meta_params keys and store 
-              them in db.columns as a global feature, if not let them stored in meta_params
-              default True
-              main_cat - bool, if True add group table and feature in one feature named 
-              'main_cat', then drop them, default True
+    opt arg : force_up_level - bool, if True delete some meta_params keys and 
+              store them in db.columns as a global feature, if not let them 
+              stored in meta_params default True
+              main_cat - bool, if True add group table and feature in one feature 
+              named 'main_cat', then drop them, default True
    
     do      : - 
     
