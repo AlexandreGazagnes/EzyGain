@@ -15,7 +15,7 @@
 
 
 # built in
-import os, logging, sys, time, random, inspect, subprocess
+import os, logging, sys, time, random, inspect, subprocess, pickle
 # from math import ceil
 # import itertools as it
 from pprint import pprint
@@ -27,8 +27,8 @@ import pandas as pd
 import numpy as np
 
 # visualization
-# import matplotlib.pyplot as plt
-# import seaborn as sns
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # machine learning
 # from sklearn.model_selection import GridSearchCV
@@ -78,7 +78,7 @@ info = logging.info
 #       Filepaths
 ########################################################
 
-FOLDER       = "/home/alex/EzyGain/"
+FOLDER       = "/home/alex/Bureau/EzyGain/"
 DATA_FOLDER  = FOLDER + "data/" 
 
 
@@ -95,7 +95,7 @@ ALL         = "_all_docs"
 
 
 ########################################################
-#       DataBase
+#       DataBase client
 ########################################################
 
 # client = CouchDB(USERNAME, PASSWORD, url=URL, connect=True)
@@ -423,6 +423,32 @@ db = build_database(all_keys, save=True, threshold=0)
 ##################################################################
 
 
+
+
+def save_db(db, filename="db.pk") :
+
+    path = DATA_FOLDER+filename
+    with open(path, 'wb') as fichier:
+        pickler = pickle.Pickler(fichier)
+        pickler.dump(db)
+    return 0
+
+
+def load_db(filename="db.pk") : 
+
+    path = DATA_FOLDER+filename
+    with open(path, 'rb') as fichier:
+        depickler = pickle.Unpickler(fichier)
+        return depickler.load()
+
+
+
+####
+
+
+save_db(db)
+
+
 def manage_meta(db, force_up_level=True, main_cat=True) : 
     """
     desc    : from a dabase, identify "meta_params" ie features in _data with 
@@ -666,6 +692,194 @@ grouped  = group_by_feat(db_meta)
 ##################################################################
 
 
+
+
+
+def focus_on_activities(db_meta) : 
+    """
+    """
+
+    # copy data
+    _db_meta = db_meta.copy()
+
+    # extract only "activites" and create a meta_feature
+    activities = _db_meta.loc[_db_meta.main_cat == "activities_gameData", :]
+    activities["_type"] = [i.meta_params["activityName"] for _, i in activities.iterrows()]
+
+    # uniquye type
+    activities_type_unique = set([i.meta_params["activityName"] for _, i in activities.iterrows()])
+
+    # split activities in main, and sub
+    def split_activity_type(act) : 
+        if not isinstance(act, str)   : raise AttributeError("string expected")
+        if "static_analysis"   in act : return "static_analysis", act.replace("static_analysis_", "")
+        if "walking_landscape" in act : return "walking", act.replace("walking_", "")
+        else                          : return act, None
+
+    # update activity feature and drop old one
+    activities["_type"]     = activities._type.apply(split_activity_type)
+    activities["main_type"] = activities._type.apply(lambda i : i[0])
+    activities["sub_type"]  = activities._type.apply(lambda i : i[1])
+    activities              = activities.drop("_type", axis=1)
+
+    return activities
+
+
+####
+
+activities = focus_on_activities(db_meta)
+
+try    : del db_meta
+except : pass
+try    : del db
+except : pass
+try    : del _db
+except : pass
+
+
+
+
+def flatten_walking(activities) : 
+    """
+    """
+
+    # select only walking activites
+    main_activities_unique = activities.main_type.unique()
+    walking = activities.loc[activities.main_type=="walking", :].copy()
+
+    # flatten (normalize) data
+    walking_datas = list()
+    walking_meta_params = list()
+
+    for i_num, i_val in enumerate(walking.index): 
+
+        walk                =  walking.loc[i_val, :]
+
+        walk_meta_params    = walk.meta_params
+        # info(walk_meta_params)
+
+        walk_data           = walk["_data"]["gameData"]
+        # info(walk_data)
+        # print("\n"*3)
+
+        # sainty check
+        if not isinstance(walk_data, dict) : 
+            if len(walk_data) == 1 : 
+                walk_data = walk_data[0]
+                if not  isinstance(walk_data, dict) : raise TypeError("expected dict")
+            else : raise TypeError("expected len _data = 1 ")
+
+        # get nb of chuncks
+        # BE CAREFULL SOME WALKS HAS NO CHUNKS --> ERRORS
+        if "gaitDataChunks" in walk_data.keys() : 
+            walk_data["nb_chunks"] = len(walk_data["gaitDataChunks"])
+        else : 
+            walk_data["nb_chunks"] = 0
+
+        # force iterable  
+        def force_iter(elem) : 
+            if     isinstance(elem, str)      : return [elem,]
+            if not isinstance(elem, Iterable) : return [elem,]
+            else                              : return elem
+        walk_data = {i : force_iter(elem) for i, elem in walk_data.items() }    
+
+        
+        if walk_data["nb_chunks"][0] :                  
+            # try to flatten gaitDataChunks
+            gaitDataChunks = pd.DataFrame(walk_data["gaitDataChunks"])
+
+            for c, elem in gaitDataChunks.iteritems() : 
+                walk_data[c] = list(elem.values)
+
+            del walk_data["gaitDataChunks"]
+
+            # try to flatten metronomValues
+
+            # walk_data["metronomValues_avgMetronomSpeed"] = walk_data["metronomValues"]["avgMetronomSpeed"] 
+            # del walk_data["metronomValues"]["avgMetronomSpeed"]
+            # walk_data["metronomValues_chunks"] = walk_data["metronomValues"]["chunks"] 
+
+            ######################################
+            try : 
+                del walk_data["metronomValues"]
+            except : 
+                pass
+            ##########################################
+
+        # sanity check
+        for k, v in walk_data.items() : 
+            if not isinstance(v, Iterable) : raise TypeError("{} is not iterable".format(k))
+
+        # delete None values
+        walk_data = {k: v for k, v in walk_data.items() if len(v)>0}
+
+        # pop _data in meta_params
+        del_item = list()
+        for k, v in walk_data.items() : 
+            if len(v) == 1 : 
+                walk_meta_params[k] = v[0]
+                del_item.append(k)
+            else :
+                walk_meta_params[k] = "Iterable"
+
+        walk_data = {k: v for k, v in walk_data.items() if k not in del_item}
+
+        walking_datas.append(walk_data)
+        walking_meta_params.append(walk_meta_params)
+
+    # update _data and _meta
+    walking["_data"]        = walking_datas
+    walking["meta_params"]  = walking_meta_params 
+
+    # pop meta in upper level
+    meta_params  = pd.DataFrame([pd.Series(i) for i in walking["meta_params"]], index=walking["meta_params"].index)
+    walking = walking.join(meta_params, how="right", rsuffix="_meta")
+    walking = walking.drop("meta_params", axis=1)
+
+
+    return walking
+
+
+
+####
+
+walking = flatten_walking(activities)
+
+
+def explore_walking(walking) : 
+
+    print(walking.columns)
+
+    numeric_feats = ["distance", "duration", "nb_chunks", "patientWeight", "steps", "speed"]
+    fig, axs = plt.subplots(1, len(numeric_feats), figsize=(12, 5))
+    for i, feat in enumerate(numeric_feats) : 
+        feats = walking[feat].replace("Iterable", np.nan).dropna().astype(np.float32)
+        axs[i].hist(feats.dropna())
+        axs[i].set_ylabel("count")
+        axs[i].set_xlabel(feat)
+
+    plt.suptitle("Numerical features distribution") 
+    plt.show()
+
+    cat_feats = ["deviceSerialNumber", "sub_type"]
+    fig, axs = plt.subplots(1, len(cat_feats), figsize=(12, 5))
+    for i, feat in enumerate(cat_feats) : 
+        feats = walking[feat].replace("Iterable", np.nan).dropna().value_counts()
+        feats.plot(kind="bar", ax=axs[i])
+        axs[i].set_ylabel("count")
+        axs[i].set_xlabel(feat)
+    plt.suptitle("Categorical features distribution") 
+    plt.show()
+
+
+
+
+df = walking.loc[:, ["PatientId", "steps"]].replace("Iterable", np.nan).dropna(how="any", axis=0)
+grouped = df.groupby("PatientId")
+grouped = pd.Series({k: len(val) for k, val in grouped })
+grouped.index = [patient *
+
+
 def flatten_data(db) : 
     """
     desc    : try to flatten the _data obj from db : look for features in _data
@@ -700,6 +914,8 @@ def flatten_data(db) :
         # info(meta_dict)
         # info(obj)
     
+        try : 
+
         # if pd.DataFrame
         if isinstance(obj, pd.DataFrame ) : 
 
@@ -723,82 +939,4 @@ def flatten_data(db) :
                 if not isinstance(sample, dict) : 
                     continue 
 
-                sample_keys = sorted(list(sample.keys()))
-                for f in sample_keys : 
-                    obj[f] = obj[feat].apply(lambda d : d[f])
-                    sub_feature.append(f)
-                obj = obj.drop(feat, axis=1)
-
-            meta_dict["sub_feature"] = list(sub_feature)
-            metas.append(meta_dict)
-            objs.append(obj)
-
-        else : 
-
-            #################
-
-            # PLEASE CODE THIS
-
-            ##################
-
-            metas.append(meta_dict)
-            objs.append(obj)
-
-    # check valid shapes
-    if len(metas) != len(_db) : raise ValueError("pb len de metas")
-    if len(objs) != len(_db)  : raise ValueError("pb len de objs")
-
-    # info if  needed 
-    info(metas)
-    info(objs)
-
-    # _db
-    _db["meta_params"] = metas
-    _db["_data"] = objs
-
-####
-
-db_meta_flatten = flatten_data(db_meta)
-
-##################################################################
-
-
-##################################################################
-#       Garbage
-##################################################################
-
-
-def _handle_timestamp(t) : 
-    t = datetime.datetime.fromtimestamp(t / 1e3)
-    txt = "{}-{}-{} {}:{}:{}".format(   t.day, t.month, t.year,
-                                        t.hour, t.minute, t.second)
-    return txt
-
-
-def find_candidate_feat(database) : 
-    """find all feat (pd.DataFrame) or index (pd.Series) of the "_data" in the database"""
-    candidate_feat = list()
-    for idx in database.index : 
-        obj = database.loc[idx, "_data"]
-        cols = obj.columns if isinstance(obj, pd.DataFrame) else obj.index
-        candidate_feat += list(cols)
-    candidate_feat = list(set(candidate_feat))
-    return candidate_feat
-
-
-def find_valid_feat(database, candidate_feat) : 
-    """find each of candidate_feat are in ALL the "_data" feats in the database"""
-    valid_feat = list()
-    for candidate in candidate_feat : 
-        in_list = list()
-        for idx in database.index : 
-            obj = database.loc[idx, "_data"]
-            is_in = ( (candidate in obj.columns) if isinstance(obj, pd.DataFrame) 
-                                                 else (candidate in obj.index) )
-            in_list.append(is_in)
-
-        if pd.Series(in_list).all() : valid_feat.append(candidate)
-    return valid_feat
-
-
-
+                sample_keys = sorted(l
