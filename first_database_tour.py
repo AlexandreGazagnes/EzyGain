@@ -872,12 +872,18 @@ def explore_walking(walking) :
     plt.show()
 
 
+    df = walking.loc[:, ["PatientId", "steps"]].replace("Iterable", np.nan).dropna(how="any", axis=0)
+    grouped = df.groupby("PatientId")
+    grouped = pd.Series({k: len(val) for k, val in grouped })
+
+    grouped.index = ["patient "+str(i) for i in range(len(grouped))]
+    grouped.plot(kind="bar")
+    plt.xlabel("patient - anonymous")
+    plt.ylabel("count")
+    plt.title("number of seance by patient")
 
 
-df = walking.loc[:, ["PatientId", "steps"]].replace("Iterable", np.nan).dropna(how="any", axis=0)
-grouped = df.groupby("PatientId")
-grouped = pd.Series({k: len(val) for k, val in grouped })
-grouped.index = [patient *
+    df = walking.loc
 
 
 def flatten_data(db) : 
