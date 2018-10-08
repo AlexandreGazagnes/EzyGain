@@ -427,7 +427,7 @@ db = build_database(all_keys, save=True, threshold=0)
 
 def save_db(db, filename="db.pk") :
 
-    path = DATA_FOLDER+filename
+    path = FOLDER+filename
     with open(path, 'wb') as fichier:
         pickler = pickle.Pickler(fichier)
         pickler.dump(db)
@@ -436,7 +436,7 @@ def save_db(db, filename="db.pk") :
 
 def load_db(filename="db.pk") : 
 
-    path = DATA_FOLDER+filename
+    path = FOLDER+filename
     with open(path, 'rb') as fichier:
         depickler = pickle.Unpickler(fichier)
         return depickler.load()
@@ -939,4 +939,82 @@ def flatten_data(db) :
                 if not isinstance(sample, dict) : 
                     continue 
 
-                sample_keys = sorted(l
+                sample_keys = sorted(list(sample.keys()))
+                for f in sample_keys : 
+                    obj[f] = obj[feat].apply(lambda d : d[f])
+                    sub_feature.append(f)
+                obj = obj.drop(feat, axis=1)
+
+            meta_dict["sub_feature"] = list(sub_feature)
+            metas.append(meta_dict)
+            objs.append(obj)
+
+        else : 
+
+            #################
+
+            # PLEASE CODE THIS
+
+            ##################
+
+            metas.append(meta_dict)
+            objs.append(obj)
+
+    # check valid shapes
+    if len(metas) != len(_db) : raise ValueError("pb len de metas")
+    if len(objs) != len(_db)  : raise ValueError("pb len de objs")
+
+    # info if  needed 
+    info(metas)
+    info(objs)
+
+    # _db
+    _db["meta_params"] = metas
+    _db["_data"] = objs
+
+####
+
+db_meta_flatten = flatten_data(db_meta)
+
+##################################################################
+
+
+##################################################################
+#       Garbage
+##################################################################
+
+
+def _handle_timestamp(t) : 
+    t = datetime.datetime.fromtimestamp(t / 1e3)
+    txt = "{}-{}-{} {}:{}:{}".format(   t.day, t.month, t.year,
+                                        t.hour, t.minute, t.second)
+    return txt
+
+
+def find_candidate_feat(database) : 
+    """find all feat (pd.DataFrame) or index (pd.Series) of the "_data" in the database"""
+    candidate_feat = list()
+    for idx in database.index : 
+        obj = database.loc[idx, "_data"]
+        cols = obj.columns if isinstance(obj, pd.DataFrame) else obj.index
+        candidate_feat += list(cols)
+    candidate_feat = list(set(candidate_feat))
+    return candidate_feat
+
+
+def find_valid_feat(database, candidate_feat) : 
+    """find each of candidate_feat are in ALL the "_data" feats in the database"""
+    valid_feat = list()
+    for candidate in candidate_feat : 
+        in_list = list()
+        for idx in database.index : 
+            obj = database.loc[idx, "_data"]
+            is_in = ( (candidate in obj.columns) if isinstance(obj, pd.DataFrame) 
+                                                 else (candidate in obj.index) )
+            in_list.append(is_in)
+
+        if pd.Series(in_list).all() : valid_feat.append(candidate)
+    return valid_feat
+
+
+
