@@ -13,9 +13,8 @@
 #       Import
 ########################################################
 
-
 # built in
-import os, logging, sys, time, random, inspect, subprocess, pickle
+import os, logging, sys, time, random, inspect, subprocess, pickle, datetime
 # from math import ceil
 # import itertools as it
 from pprint import pprint
@@ -168,8 +167,8 @@ def bdd_request(filename, stdout=False, save=True, meth="GET", ext="") :
 # r = bdd_request(ALL, stdout=False, save=True)
 # print(r)
 
-##################################################################
 
+##################################################################
 
 def handle_all_docs(filename="_all_docs", save=True) : 
     """
@@ -215,10 +214,12 @@ def handle_all_docs(filename="_all_docs", save=True) :
 ####
 
 all_docs = handle_all_docs()
+
+# here we have all keys
 all_keys = all_docs.key.values
 
-##################################################################
 
+##################################################################
 
 def download_all() : 
     """
@@ -261,11 +262,13 @@ def download_all() :
 
 ####
 
-# errors = download_all()
-# print(errors)
+# do not perform this download unless you are working on a local repo
+
+# errors = download_all()
+# print(errors)
+
 
 ##################################################################
-
 
 def load_file(key, save=True) : 
     """
@@ -314,6 +317,15 @@ def load_file(key, save=True) :
 
     return df
 
+
+####
+
+
+all_keys[0]
+df = load_file(all_keys[0], save=False)
+
+
+#####################################################################
 
 def build_database(keys, save=False, threshold=0, drop_na=True) : 
     """
@@ -422,9 +434,7 @@ db = build_database(all_keys, save=True, threshold=0)
 
 ##################################################################
 
-
-
-
+# save and load if needed
 def save_db(db, filename="db.pk") :
 
     path = FOLDER+filename
@@ -445,9 +455,11 @@ def load_db(filename="db.pk") :
 
 ####
 
+# save_db(db)
+# db = load_db()
 
-save_db(db)
 
+####################################################################
 
 def manage_meta(db, force_up_level=True, main_cat=True) : 
     """
@@ -622,8 +634,8 @@ except : pass
 try    : del _db
 except : pass
 
-##################################################################
 
+##################################################################
 
 def explore_main_cats(db) : 
     """
@@ -643,17 +655,8 @@ def explore_main_cats(db) :
 
 explore_main_cats(db_meta)
 
-# analyse cats proprerties
-K=[ ['main_cat',                            'inception',    'feature',          'real_columns_level_1',                     'real_columns_level_2'                  ],               
-    ['weights_groups_Weight',               1,              'Weights',          ['time', 'speed', 'w1', 'w2', 'w3' ,'w4'],  None,                                   ],  
-    ['activities_gameData',                                                                                                                                         ],
-    ['static_analysis_eventsmetadatastats'  2,              'gaitParameters',   ['name', 'startTime', 'value'],             ['time', 'speed', 'w1','w2','w3','w4']  ], 
-    ['gait_analysis_gaitParameters',                                                                                                                                ],
-    ['static_analysis_configeventsstats',                                                                                                                           ],
-    ['None_views',] ]
 
 ##################################################################
-
 
 def group_by_feat(db, feat="main_cat", verbose=True) : 
     """
@@ -671,17 +674,20 @@ def group_by_feat(db, feat="main_cat", verbose=True) :
         raise AttributeError("feat not in db.columns")
 
 
-    # create a spec df
+    # create a spec df
     df              = pd.DataFrame({"key":db.index.values, feat:db[feat].values}) 
 
-    # group and handle
+    # group and handle
     grouped         = df.groupby(feat)
     grouped         = {idx : list(_df.key.values)for idx, _df in grouped}
     
-    # info value_counts() like method
+    # info value_counts() like method
     if verbose : 
         grouped_count   = {idx : len(elem) for idx, elem in grouped.items()}
         pprint(grouped_count)
+        pd.Series(grouped_count).plot(kind="bar")
+        plt.xlabel("file_type")
+        plt.ylabel("count")
 
     return grouped
 
@@ -689,11 +695,8 @@ def group_by_feat(db, feat="main_cat", verbose=True) :
 
 grouped  = group_by_feat(db_meta)
 
+
 ##################################################################
-
-
-
-
 
 def focus_on_activities(db_meta) : 
     """
@@ -737,7 +740,28 @@ try    : del _db
 except : pass
 
 
+##################################################################
 
+def explore_activites(activities) : 
+    """
+    """
+    
+    act_count = activities.main_type.value_counts()
+    act_count.plot(kind="bar")
+    plt.title("distribution of activites main type")
+    plt.xlabel("activites"); plt.ylabel("count")
+    plt.show()
+
+    act_count = act_count.drop("walking")
+    act_count.plot(kind="bar")
+    plt.title("distribution of activites main type")
+    plt.xlabel("activites"); plt.ylabel("count")
+    plt.show()
+
+
+explore_activites(activities)
+
+##################################################################
 
 def flatten_walking(activities) : 
     """
@@ -845,6 +869,7 @@ def flatten_walking(activities) :
 
 walking = flatten_walking(activities)
 
+##################################################################
 
 def explore_walking(walking) : 
 
@@ -871,19 +896,105 @@ def explore_walking(walking) :
     plt.suptitle("Categorical features distribution") 
     plt.show()
 
-
     df = walking.loc[:, ["PatientId", "steps"]].replace("Iterable", np.nan).dropna(how="any", axis=0)
     grouped = df.groupby("PatientId")
     grouped = pd.Series({k: len(val) for k, val in grouped })
-
     grouped.index = ["patient "+str(i) for i in range(len(grouped))]
     grouped.plot(kind="bar")
     plt.xlabel("patient - anonymous")
     plt.ylabel("count")
     plt.title("number of seance by patient")
+    plt.show()
 
 
-    df = walking.loc
+    # time
+    original_dates = walking.createdAt.sort_values(ascending=False).values.copy()
+    original_dates[:10]
+
+    # warning, time in MiliSeconds
+    second_dates = [int(i/1000) for i in original_dates]
+
+    def _handle_timestamp(t) : 
+        t = datetime.datetime.fromtimestamp(t)
+        txt = "{}-{}-{} {}:{}:{}".format(   t.day, t.month, t.year,
+                                            t.hour, t.minute, t.second)
+        return txt
+
+    # pprint([(i, _handle_timestamp(i)) for i in second_dates][:3])
+    # print()
+    # pprint([(i, _handle_timestamp(i)) for i in second_dates][-3:])
+
+    one_day = 24 * 60 * 60
+    day_dates = [int(i /(one_day)) for i in second_dates]
+    nb_of_days = day_dates[0] - day_dates[-1]
+    nb_of_weeks = int(nb_of_days / 5)
+
+    ys, xs, _ = plt.hist(pd.Series(day_dates), bins=nb_of_days)
+    plt.xlabel("day")
+    new_xs = [i for i in xs if not i%5]
+    new_labels = list(range(len(new_xs))) 
+    plt.xticks(new_xs, new_labels)
+    plt.ylabel("count")
+    plt.title("frequency by time (delta = weeks)")
+    plt.show()
+
+    ys, xs, _ = plt.hist(day_dates, bins=nb_of_weeks)
+    plt.xlabel("day")
+    new_labels = list(range(len(xs))) 
+    plt.xticks(xs, new_labels)
+    plt.ylabel("count")
+    plt.title("frequency by time (delta = week)")
+    plt.show()
+
+####
+
+explore_walking(walking)
+
+
+##################################################################
+
+
+##################################################################
+#       Garbage
+##################################################################
+
+
+def _handle_timestamp(t) : 
+    t = datetime.datetime.fromtimestamp(t / 1e3)
+    txt = "{}-{}-{} {}:{}:{}".format(   t.day, t.month, t.year,
+                                        t.hour, t.minute, t.second)
+    return txt
+
+
+def find_candidate_feat(database) : 
+    """find all feat (pd.DataFrame) or index (pd.Series) of the "_data" in the database"""
+    candidate_feat = list()
+    for idx in database.index : 
+        obj = database.loc[idx, "_data"]
+        cols = obj.columns if isinstance(obj, pd.DataFrame) else obj.index
+        candidate_feat += list(cols)
+    candidate_feat = list(set(candidate_feat))
+    return candidate_feat
+
+
+def find_valid_feat(database, candidate_feat) : 
+    """find each of candidate_feat are in ALL the "_data" feats in the database"""
+    valid_feat = list()
+    for candidate in candidate_feat : 
+        in_list = list()
+        for idx in database.index : 
+            obj = database.loc[idx, "_data"]
+            is_in = ( (candidate in obj.columns) if isinstance(obj, pd.DataFrame) 
+                                                 else (candidate in obj.index) )
+            in_list.append(is_in)
+
+        if pd.Series(in_list).all() : valid_feat.append(candidate)
+    return valid_feat
+
+
+
+
+
 
 
 def flatten_data(db) : 
@@ -981,46 +1092,3 @@ def flatten_data(db) :
 ####
 
 db_meta_flatten = flatten_data(db_meta)
-
-##################################################################
-
-
-##################################################################
-#       Garbage
-##################################################################
-
-
-def _handle_timestamp(t) : 
-    t = datetime.datetime.fromtimestamp(t / 1e3)
-    txt = "{}-{}-{} {}:{}:{}".format(   t.day, t.month, t.year,
-                                        t.hour, t.minute, t.second)
-    return txt
-
-
-def find_candidate_feat(database) : 
-    """find all feat (pd.DataFrame) or index (pd.Series) of the "_data" in the database"""
-    candidate_feat = list()
-    for idx in database.index : 
-        obj = database.loc[idx, "_data"]
-        cols = obj.columns if isinstance(obj, pd.DataFrame) else obj.index
-        candidate_feat += list(cols)
-    candidate_feat = list(set(candidate_feat))
-    return candidate_feat
-
-
-def find_valid_feat(database, candidate_feat) : 
-    """find each of candidate_feat are in ALL the "_data" feats in the database"""
-    valid_feat = list()
-    for candidate in candidate_feat : 
-        in_list = list()
-        for idx in database.index : 
-            obj = database.loc[idx, "_data"]
-            is_in = ( (candidate in obj.columns) if isinstance(obj, pd.DataFrame) 
-                                                 else (candidate in obj.index) )
-            in_list.append(is_in)
-
-        if pd.Series(in_list).all() : valid_feat.append(candidate)
-    return valid_feat
-
-
-
